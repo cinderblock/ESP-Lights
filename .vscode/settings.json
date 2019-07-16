@@ -1,0 +1,14 @@
+{
+  "files.exclude": {
+    ".pioenvs": true,
+    ".piolibdeps": true
+  },
+  "editor.formatOnSave": true,
+  "terminal.integrated.env.windows": {
+    "PLATFORMIO_CALLER": "vscode"
+  },
+  "cSpell.words": ["blinken"],
+  "files.associations": {
+    "functional": "cpp"
+  }
+}
