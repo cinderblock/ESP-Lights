@@ -136,9 +136,114 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
   }
 }
 
+constexpr unsigned int magnitude(int x) { return x < 0 ? -x : x; }
+
+void MicLoop() {
+
+  static Filter dc[] = {.0001, .0001, .0001};
+
+  static unsigned int count = 0;
+  int raw[3];
+  int mic[3];
+
+  auto const now = micros();
+  raw[0] = analogRead(32);
+  raw[1] = analogRead(33);
+  raw[2] = analogRead(34);
+
+  mic[0] = raw[0] - dc[0].feed(raw[0]);
+  mic[1] = raw[1] - dc[1].feed(raw[1]);
+  mic[2] = raw[2] - dc[2].feed(raw[2]);
+
+  count++;
+
+  static typeof(micros()) firstPulse[3];
+  static bool captured[3] = {false, false, false};
+
+  static bool started = false;
+  static typeof(micros()) startTime;
+
+  static bool blanking = false;
+  static typeof(micros()) blankingStart;
+  constexpr typeof(micros()) blankingTime = 100e3;
+
+  constexpr unsigned int threshold = 300;
+
+  if (blanking) {
+    if (micros() - blankingStart < blankingTime)
+      return;
+
+    blanking = false;
+    captured[0] = captured[1] = captured[2] = false;
+    started = false;
+  }
+
+  if (!captured[0] && magnitude(mic[0]) > threshold) {
+    if (!started) {
+      started = true;
+      startTime = now;
+      firstPulse[0] = 0;
+    } else {
+      firstPulse[0] = now - startTime;
+    }
+    captured[0] = true;
+  }
+
+  if (!captured[1] && magnitude(mic[1]) > threshold) {
+    if (!started) {
+      started = true;
+      startTime = now;
+      firstPulse[1] = 0;
+    } else {
+      firstPulse[1] = now - startTime;
+    }
+    captured[1] = true;
+  }
+
+  if (!captured[2] && magnitude(mic[2]) > threshold) {
+    if (!started) {
+      started = true;
+      startTime = now;
+      firstPulse[2] = 0;
+    } else {
+      firstPulse[2] = now - startTime;
+    }
+    captured[2] = true;
+  }
+
+  if (captured[0] && captured[1] && captured[2]) {
+    blanking = true;
+    blankingStart = micros();
+    if (lastClient)
+      lastClient->binary((uint8_t *)firstPulse, sizeof(firstPulse));
+  }
+
+  // static auto lastADC = micros();
+  // runIntervalMicro(
+  //     [&mic, &raw]() {
+  //     },
+  //     lastADC, 10);
+
+  // static auto lastDebug = millis();
+  // runInterval(
+  //     [&mic]() {
+  //       Serial.print(mic[0]);
+  //       Serial.print(",\t");
+  //       Serial.print(mic[1]);
+  //       Serial.print(",\t");
+  //       Serial.print(mic[2]);
+  //       Serial.print(",\t");
+  //       Serial.println(count);
+  //       count = 0;
+  //     },
+  //     lastDebug, 100);
+}
+
 void loop() {
   OTA::loop();
 
   static auto lastStrip = millis();
   runInterval([]() { strip.Show(); }, lastStrip, 100);
+
+  MicLoop();
 }
